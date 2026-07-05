@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stop à Zéro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --gold: #ffcf5c;
+    --silver: #c8d2da;
+    --bronze: #cd8b52;
+    --dim: #5a6b7a;
+    --glow: #4de1c1;
+    --danger: #ff5a5f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    min-height: 100%;
+    background: #0a0e14;
+    color: #f5f7fa;
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.1s linear, color 0.1s linear;
+  }
+
+  body {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(1rem, 4vh, 1.6rem);
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    user-select: none;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  .lives {
+    display: flex;
+    gap: 0.55rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dim);
+    align-items: center;
+    mix-blend-mode: difference;
+  }
+  .dots { display: flex; gap: 0.4rem; }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 1.5px solid var(--dim);
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .dot.on { background: var(--glow); border-color: var(--glow); }
+  .dot.lost { background: transparent; border-color: #808080; }
+
+  .countdown {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 7vw, 2.4rem);
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    min-height: 1.1em;
+    mix-blend-mode: difference;
+    color: #f5f7fa;
+  }
+
+  .stage {
+    position: relative;
+    width: min(78vw, 78vh, 340px);
+    height: min(78vw, 78vh, 340px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .disc {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #f5f7fa;
+    transform: scale(1);
+    will-change: transform, background-color;
+    transition: background-color 0.1s linear;
+  }
+  .stage:active .disc { filter: brightness(0.9); }
+
+  .readout {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+    text-align: center;
+    padding: 0 1rem;
+  }
+
+  .timer {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(1.7rem, 8vw, 2.8rem);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    visibility: hidden;
+  }
+  .timer.show { visibility: visible; }
+  .timer .frac { color: currentColor; opacity: 0.55; font-size: 0.5em; }
+
+  .label {
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .hint {
+    font-size: 0.86rem;
+    letter-spacing: 0.03em;
+    color: var(--dim);
+    min-height: 1.4em;
+    text-align: center;
+    max-width: 340px;
+    line-height: 1.4;
+    mix-blend-mode: difference;
+  }
+
+  .score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    min-height: 1.4em;
+    text-align: center;
+    mix-blend-mode: difference;
+  }
+  .score b { font-weight: 700; }
+
+  /* overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(6,9,13,0.97);
+    color: #f5f7fa;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.3rem;
+    padding: max(1.4rem, env(safe-area-inset-top)) 1.2rem max(1.4rem, env(safe-area-inset-bottom));
+    z-index: 10;
+    overflow-y: auto;
+  }
+  .overlay.show { display: flex; }
+
+  .over-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-align: center;
+  }
+  .over-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    color: #f5f7fa;
+    text-align: center;
+  }
+  .prompt {
+    font-size: 0.9rem;
+    color: #f5f7fa;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.4;
+  }
+
+  .action {
+    padding: 0.9rem 2.4rem;
+    background: transparent;
+    border: 1.5px solid var(--glow);
+    color: var(--glow);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 500;
+    font-size: 0.95rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.05s;
+    min-height: 48px;
+  }
+  .action:hover { background: var(--glow); color: #0a0e14; }
+  .action:active { transform: scale(0.97); }
+  .action:disabled { opacity: 0.4; cursor: default; }
+  .action.ghost { border-color: var(--dim); color: var(--dim); }
+  .action.ghost:hover { background: transparent; color: #f5f7fa; border-color: #f5f7fa; }
+
+  .name-row { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+  .name-input {
+    background: transparent;
+    border: 1.5px solid var(--dim);
+    color: #f5f7fa;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    width: 190px;
+    text-align: center;
+    outline: none;
+    min-height: 48px;
+  }
+  .name-input:focus { border-color: var(--glow); }
+
+  .photo-note {
+    font-size: 0.72rem;
+    color: var(--dim);
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.4;
+  }
+  .avatar-preview {
+    width: 72px; height: 72px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--dim);
+    display: none;
+  }
+  .avatar-preview.show { display: block; }
+  .file-btn {
+    font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--dim); border: 1.5px dashed var(--dim);
+    border-radius: 100px; padding: 0.6rem 1.4rem; cursor: pointer;
+    min-height: 44px; display: inline-flex; align-items: center;
+  }
+  .file-btn:hover { color: #f5f7fa; border-color: #f5f7fa; }
+
+  .podium {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.7rem;
+    height: 210px;
+  }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 88px; }
+  .col .face {
+    width: 44px; height: 44px; border-radius: 50%;
+    object-fit: cover; border: 2px solid;
+    background: #16202b;
+  }
+  .p1 .face { border-color: var(--gold); }
+  .p2 .face { border-color: var(--silver); }
+  .p3 .face { border-color: var(--bronze); }
+  .col .who {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem; letter-spacing: 0.04em; color: #f5f7fa;
+    max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .col .gap {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem; color: var(--dim);
+  }
+  .block {
+    width: 100%; border-radius: 6px 6px 0 0;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 0.4rem;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    font-size: 1.1rem; color: #0a0e14;
+  }
+  .p1 .block { height: 130px; background: var(--gold); }
+  .p2 .block { height: 96px;  background: var(--silver); }
+  .p3 .block { height: 66px;  background: var(--bronze); }
+
+  .rest {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem; color: var(--dim);
+    display: flex; flex-direction: column; gap: 0.35rem;
+    text-align: center; max-height: 110px; overflow-y: auto; width: 100%;
+    max-width: 300px;
+  }
+  .rest .r { display: flex; gap: 0.7rem; justify-content: center; align-items: center; }
+  .rest .r .rk { color: #3a4652; width: 1.4em; text-align: right; }
+  .rest .r .rface { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; background: #16202b; }
+  .rest .r .rname { flex: 1; text-align: left; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .loading { font-size: 0.8rem; color: var(--dim); letter-spacing: 0.1em; }
+
+  @media (max-height: 700px) {
+    .podium { height: 165px; }
+    .p1 .block { height: 100px; } .p2 .block { height: 74px; } .p3 .block { height: 50px; }
+    .col .face { width: 38px; height: 38px; }
+  }
+</style>
+</head>
+<body>
+  <div class="lives">
+    Essais du jour
+    <div class="dots" id="dots">
+      <div class="dot on"></div><div class="dot on"></div><div class="dot on"></div>
+    </div>
+  </div>
+
+  <div class="countdown" id="countdown">10</div>
+
+  <div class="stage" id="stage">
+    <div class="disc" id="disc"></div>
+    <div class="readout">
+      <div class="timer" id="timer">0<span class="frac">.000000</span></div>
+      <div class="label" id="label">Appuie sur le cercle</div>
+    </div>
+  </div>
+
+  <div class="score" id="score"></div>
+  <div class="hint" id="hint">Le cercle rétrécit sur 10 s. Tape-le au plus près de zéro.</div>
+
+  <div class="overlay" id="overlay">
+    <div id="overInner"></div>
+  </div>
+
+<script>
+(() => {
+  const DURATION = 10000;
+  const MAX_TRIES = 3;
+
+  const disc     = document.getElementById('disc');
+  const timerEl  = document.getElementById('timer');
+  const labelEl  = document.getElementById('label');
+  const countdownEl = document.getElementById('countdown');
+  const scoreEl  = document.getElementById('score');
+  const hintEl   = document.getElementById('hint');
+  const stage    = document.getElementById('stage');
+  const dots     = document.getElementById('dots').children;
+  const overlay  = document.getElementById('overlay');
+  const overInner= document.getElementById('overInner');
+
+  let state = 'idle';   // idle | running | stopped | done | locked
+  let startTime = 0;
+  let raf = 0;
+  let attempts = [];
+  let sessionBest = Infinity;
+  let dayTries = 0;
+
+  // ===================================================================
+  //  CLASSEMENT PARTAGÉ EN LIGNE (JSONBin.io)
+  //  1. Crée un compte gratuit sur https://jsonbin.io
+  //  2. Crée un "bin" avec le contenu de départ : {"scores":[]}
+  //  3. Copie ci-dessous ta Master Key (X-Master-Key) et l'ID du bin.
+  //  Sans ça, le jeu reste jouable mais le classement n'est pas partagé.
+  // ===================================================================
+  const JSONBIN_KEY = '$2a$10$MGLCs3QDPQ0RW8uav25wyuv/iwgEHtiMvw33EhHnxjQ0TI7.D2RPy';   // <-- colle ta Master Key ici
+  const JSONBIN_ID  = '6a4a6564f5f4af5e296287f4';   // <-- colle l'ID du bin ici
+  const BIN_URL = JSONBIN_ID ? `https://api.jsonbin.io/v3/b/${JSONBIN_ID}` : '';
+  const online = !!(JSONBIN_KEY && JSONBIN_ID);
+
+  // essais du jour : stockés localement sur l'appareil du joueur
+  function todayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function loadTries() {
+    try {
+      const raw = localStorage.getItem('sz_tries');
+      if (!raw) return 0;
+      const o = JSON.parse(raw);
+      return o.day === todayKey() ? (o.n || 0) : 0;
+    } catch { return 0; }
+  }
+  function saveTries(n) {
+    try { localStorage.setItem('sz_tries', JSON.stringify({ day: todayKey(), n })); } catch {}
+  }
+
+  // classement partagé via JSONBin
+  async function fetchBin() {
+    if (!online) return [];
+    try {
+      const r = await fetch(BIN_URL + '/latest', {
+        headers: { 'X-Master-Key': JSONBIN_KEY, 'X-Bin-Meta': 'false' }
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      const scores = (data && data.scores) ? data.scores : (Array.isArray(data) ? data : []);
+      return scores;
+    } catch { return []; }
+  }
+  async function putBin(scores) {
+    if (!online) return;
+    try {
+      await fetch(BIN_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+        body: JSON.stringify({ scores })
+      });
+    } catch {}
+  }
+
+  async function loadBoard() {
+    const rows = await fetchBin();
+    rows.sort((a,b) => a.gap - b.gap);
+    return rows;
+  }
+
+  async function saveScore(entry) {
+    if (!online) return;
+    const rows = await fetchBin();
+    const key = entry.name.replace(/[^A-Z0-9]/gi,'').slice(0,8).toUpperCase() || 'ANON';
+    const existing = rows.find(r => r.name === key);
+    if (existing) {
+      if (entry.gap < existing.gap) { existing.gap = entry.gap; }
+      if (entry.photo) existing.photo = entry.photo;
+    } else {
+      rows.push({ name: key, gap: entry.gap, photo: entry.photo || null });
+    }
+    // trier, garder les photos du top 3 uniquement, limiter la liste à 25 entrées
+    rows.sort((a,b) => a.gap - b.gap);
+    rows.forEach((r,i) => { if (i >= 3) r.photo = null; });
+    await putBin(rows.slice(0, 25));
+  }
+
+  function fmt(ms) {
+    if (ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000);
+    const micro = Math.floor((ms - s * 1000) * 1000);
+    return { s, frac: String(micro).padStart(6, '0') };
+  }
+
+  function updateDots() {
+    for (let i = 0; i < MAX_TRIES; i++)
+      dots[i].className = 'dot ' + (i < dayTries ? 'lost' : 'on');
+  }
+
+  function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+  function mix(c1, c2, t) {
+    return `rgb(${lerp(c1[0],c2[0],t)},${lerp(c1[1],c2[1],t)},${lerp(c1[2],c2[2],t)})`;
+  }
+  const BLACK = [10, 14, 20];
+  const WHITE = [245, 247, 250];
+
+  function render(remaining) {
+    const { s, frac } = fmt(remaining);
+    timerEl.innerHTML = `${s}<span class="frac">.${frac}</span>`;
+    countdownEl.textContent = Math.ceil(remaining / 1000);
+    const p = Math.max(0, Math.min(1, remaining / DURATION));
+    disc.style.transform = `scale(${p})`;
+    const t = 1 - p;
+    const bg = mix(BLACK, WHITE, t);
+    const fg = mix(WHITE, BLACK, t);
+    document.body.style.background = bg;
+    document.body.style.color = fg;
+    disc.style.background = fg;
+    timerEl.style.color = bg;
+    labelEl.style.color = bg;
+  }
+
+  function loop(now) {
+    const remaining = DURATION - (now - startTime);
+    if (remaining <= 0) { render(0); finish(0, true); return; }
+    render(remaining);
+    raf = requestAnimationFrame(loop);
+  }
+
+  function start() {
+    state = 'running';
+    scoreEl.textContent = '';
+    hintEl.textContent = 'Tape le cercle pour le stopper !';
+    labelEl.textContent = 'Appuie le plus proche possible de la fin';
+    timerEl.classList.remove('show');
+    render(DURATION);
+    startTime = performance.now();
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function finish(remaining, timedOut) {
+    cancelAnimationFrame(raf);
+    state = 'stopped';
+    render(remaining);
+    timerEl.classList.add('show');
+    dayTries++;
+    updateDots();
+    saveTries(dayTries);
+
+    const { s, frac } = fmt(remaining);
+    if (timedOut) {
+      scoreEl.innerHTML = `<b style="color:var(--danger)">Trop tard !</b>`;
+      labelEl.textContent = 'zéro atteint';
+      attempts.push(Infinity);
+      hintEl.textContent = "Tu n'as pas tapé à temps.";
+    } else {
+      const gap = remaining;
+      attempts.push(gap);
+      sessionBest = Math.min(sessionBest, gap);
+      let verdict, col;
+      if (gap < 5)         { verdict = 'PARFAIT';     col = 'var(--glow)'; }
+      else if (gap < 50)   { verdict = 'Chirurgical'; col = 'var(--glow)'; }
+      else if (gap < 250)  { verdict = 'Excellent';   col = 'var(--gold)'; }
+      else if (gap < 1000) { verdict = 'Pas mal';     col = 'var(--gold)'; }
+      else                 { verdict = 'Anticipé';    col = 'var(--dim)'; }
+      scoreEl.innerHTML = `<b>${s}.${frac}</b>`;
+      labelEl.textContent = 'seconde restante';
+      hintEl.innerHTML = `<span style="color:${col}">${verdict}</span> · écart ${gap.toFixed(3)} ms`;
+    }
+
+    if (dayTries >= MAX_TRIES) {
+      state = 'done';
+      setTimeout(askName, 800);
+    } else {
+      const left = MAX_TRIES - dayTries;
+      hintEl.innerHTML += ` — ${left} essai${left>1?'s':''} restant${left>1?'s':''}. Tape pour continuer.`;
+    }
+  }
+
+  function fileToAvatar(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const size = 160;
+        const c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        const ctx = c.getContext('2d');
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+      img.src = url;
+    });
+  }
+
+  function askName() {
+    const bestTxt = sessionBest === Infinity ? '—' : sessionBest.toFixed(3) + ' ms';
+    overInner.innerHTML = `
+      <div class="over-title">Manche terminée</div>
+      <div class="over-sub">Meilleur écart&nbsp;: ${bestTxt}</div>
+      <div class="prompt">Entre ton nom pour le classement</div>
+      <div class="name-row">
+        <input class="name-input" id="nameInput" maxlength="8" placeholder="XXX" autocomplete="off">
+      </div>
+      <img class="avatar-preview" id="avatarPreview" alt="">
+      <label class="file-btn" for="photoInput">Ajouter une photo</label>
+      <input type="file" id="photoInput" accept="image/*" style="display:none">
+      <div class="photo-note">Ta photo sera visible par tous les joueurs sur le classement partagé.</div>
+      <button class="action" id="saveBtn">Voir le classement</button>
+      ${online ? '' : '<div class="photo-note" style="color:var(--danger)">Classement partagé non configuré (ajoute ta clé JSONBin dans le code). Tes scores restent locaux.</div>'}
+    `;
+    overlay.classList.add('show');
+
+    let avatar = null;
+    const input   = document.getElementById('nameInput');
+    const preview = document.getElementById('avatarPreview');
+    const photo   = document.getElementById('photoInput');
+    input.focus();
+
+    photo.addEventListener('change', async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try { avatar = await fileToAvatar(f); preview.src = avatar; preview.classList.add('show'); } catch {}
+    });
+
+    const save = async () => {
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      if (sessionBest !== Infinity) {
+        let name = (input.value || 'ANON').trim().toUpperCase().slice(0,8) || 'ANON';
+        await saveScore({ name, gap: sessionBest, photo: avatar });
+      }
+      showPodium(true);
+    };
+    document.getElementById('saveBtn').addEventListener('click', save);
+    input.addEventListener('keydown', e => { if (e.code === 'Enter') save(); });
+  }
+
+  const PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44"><rect width="44" height="44" fill="%2316202b"/><circle cx="22" cy="17" r="8" fill="%235a6b7a"/><path d="M8 44c0-9 6-14 14-14s14 5 14 14" fill="%235a6b7a"/></svg>'
+  );
+
+  async function showPodium(locked) {
+    overlay.classList.add('show');
+    overInner.innerHTML = '<div class="loading">Chargement du classement…</div>';
+    const board = await loadBoard();
+    const top = board.slice(0,3);
+    const rest = board.slice(3,10);
+    const order = [1,0,2];
+
+    let podiumHtml = '<div class="podium">';
+    order.forEach(idx => {
+      const p = top[idx];
+      const cls = `p${idx+1}`;
+      const face = p && p.photo ? p.photo : PLACEHOLDER;
+      const who = p ? p.name : '—';
+      const gap = p ? p.gap.toFixed(2)+' ms' : '';
+      podiumHtml += `
+        <div class="col ${cls}">
+          <img class="face" src="${face}" alt="">
+          <div class="who">${who}</div>
+          <div class="gap">${gap}</div>
+          <div class="block">${idx+1}</div>
+        </div>`;
+    });
+    podiumHtml += '</div>';
+
+    let restHtml = '';
+    if (rest.length) {
+      restHtml = '<div class="rest">' + rest.map((p,i) =>
+        `<div class="r"><span class="rk">${i+4}.</span>
+          <img class="rface" src="${p.photo || PLACEHOLDER}" alt="">
+          <span class="rname">${p.name}</span>
+          <span>${p.gap.toFixed(2)} ms</span></div>`
+      ).join('') + '</div>';
+    }
+
+    const footer = locked
+      ? '<div class="over-sub" style="color:var(--gold)">Reviens demain</div><div class="photo-note">Tu as utilisé tes 3 essais du jour.</div>'
+      : '<button class="action ghost" id="closeBtn">Fermer</button>';
+
+    overInner.innerHTML = `
+      <div class="over-title">Podium partagé</div>
+      ${podiumHtml}
+      ${restHtml || '<div class="photo-note">Personne au classement pour le moment.</div>'}
+      ${footer}
+    `;
+    const closeBtn = document.getElementById('closeBtn');
+    if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+  }
+
+  function closeOverlay() {
+    overlay.classList.remove('show');
+    lockOut();
+  }
+
+  function lockOut() {
+    state = 'locked';
+    hintEl.textContent = 'Tu as utilisé tes 3 essais du jour. Reviens demain.';
+    labelEl.textContent = 'Reviens demain';
+    render(DURATION);
+    timerEl.classList.remove('show');
+  }
+
+  function tapCircle(e) {
+    if (e) { e.preventDefault(); }
+    if (state === 'running') {
+      finish(DURATION - (performance.now() - startTime), false);
+    } else if ((state === 'idle' || state === 'stopped') && dayTries < MAX_TRIES) {
+      start();
+    }
+  }
+
+  // pointerdown covers mouse + touch + pen; fall back to touch/click on old engines
+  if (window.PointerEvent) {
+    stage.addEventListener('pointerdown', tapCircle);
+  } else {
+    stage.addEventListener('touchstart', tapCircle, { passive: false });
+    stage.addEventListener('click', tapCircle);
+  }
+  window.addEventListener('keydown', e => {
+    if (overlay.classList.contains('show')) return;
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapCircle(); }
+  });
+
+  (async () => {
+    render(DURATION);
+    dayTries = loadTries();
+    updateDots();
+    if (dayTries >= MAX_TRIES) { lockOut(); showPodium(true); }
+  })();
+})();
+</script>
+</body>
+</html>
